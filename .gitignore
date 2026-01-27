@@ -1,0 +1,8 @@
+# EasyEDA generated files and archives
+*.zip
+*.rar
+*.7z
+*/ProductionFiles/
+*.backup
+*.autosave
+debug.log
