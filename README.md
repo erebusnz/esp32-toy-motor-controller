@@ -1,6 +1,6 @@
 # ESP32 Toy Motor Controller
 
-A compact dual DC motor controller board designed around an **ESP32-S3 (18-pin layout)** compatible with common compact modules such as the **TENSTAR ESP32-S3 18PIN board**, and the **TB6612FNG** dual H-bridge motor driver.
+A compact dual DC motor controller board designed around the **ESP32S3-Super Mini** module and the **TB6612FNG** dual H-bridge motor driver.
 
 This project targets small toy hacking with reliable bidirectional DC motor control, PWM speed control, and simple GPIO-controlled switching of accessories.
 
@@ -9,7 +9,7 @@ This project targets small toy hacking with reliable bidirectional DC motor cont
 ## Overview
 
 The board integrates:
-- An **ESP32-S3 using an 18-pin module layout** (aligned with TENSTAR-style boards from aliexpress, avoid clones and use TENSTAR store for purchase)
+- An **ESP32S3-Super Mini** module
 - A **TB6612FNG** dual H-bridge motor driver
 - Two GPIO-controlled low-side switches using NPN transistors
 - On-board decoupling and bulk capacitance for motor stability
@@ -29,8 +29,7 @@ The board integrates:
 
 ### Microcontroller
 
-- **ESP32-S3 (18-pin layout)**
-- Compatible with compact modules such as the TENSTAR ESP32-S3 18PIN board
+- **ESP32S3-Super Mini**
 - GPIOs directly control motor driver and switch circuitry
 
 ### Motor Driver
@@ -73,14 +72,13 @@ The board integrates:
 
 ---
 
-## ESP32-S3 (18-Pin) GPIO Mapping
-
-This GPIO assignment is fixed and intended to align with common 18-pin ESP32-S3 modules.
+## ESP32S3-Super Mini GPIO Mapping
 
 ### Motor Driver (TB6612FNG)
 
-| ESP32-S3 GPIO | TB6612FNG Signal | Function |
+| ESP32S3-Super Mini GPIO | TB6612FNG Signal | Function |
 |---------------|------------------|----------|
+| GP2  | STBY | Motor driver enable (HIGH = enabled) |
 | GP8  | PWMA | Motor A speed |
 | GP10 | AIN1 | Motor A direction |
 | GP9  | AIN2 | Motor A direction |
@@ -90,18 +88,76 @@ This GPIO assignment is fixed and intended to align with common 18-pin ESP32-S3 
 
 ### Switch Control
 
-| ESP32-S3 GPIO | Function |
-|---------------|----------|
+| ESP32S3-Super Mini GPIO | Function |
+|-------------------------|----------|
 | GP1 | Switch 1 control |
 | GP7 | Switch 2 control |
 
-- Switches use **low-side NPN switching**: the ESP32 GPIO must be driven **LOW to turn the switch ON** and **HIGH to turn it OFF**.
+- Switches use **NPN low-side switching** (PZT2222A): drive GPIO **HIGH to turn the switch ON**, **LOW to turn it OFF**.
+- Both switches default to OFF (GPIO LOW) at boot.
 
 ---
 
 ## Arduino Software
 
-TBD / coming soon!
+### Requirements
+
+- **Arduino IDE** with the **ESP32 board package** installed
+- Board: **ESP32S3 Dev Module**
+- Core: **Espressif ESP32 Arduino core v3.x or later** — required for `ledcAttach()`. Install via Arduino IDE > Boards Manager > "esp32 by Espressif Systems" >= 3.0.0
+- USB CDC On Boot: **Enabled** (for Serial monitor over USB)
+
+### Example Sketch — Forward/Backward Toggle
+
+The included sketch `esp32-toy-motor-controller.ino` demonstrates basic bidirectional control of both motors.
+
+**What it does:**
+
+1. Runs Motor A and Motor B **forward** for 2 seconds (onboard LED on, GPIO 48)
+2. Stops briefly (400 ms coast)
+3. Runs Motor A and Motor B **backward** for 2 seconds (LED off)
+4. Stops briefly and repeats
+
+**Key constants to adjust:**
+
+| Constant | Default | Description |
+|---|---|---|
+| `MOTOR_SPEED` | `180` | PWM duty cycle, 0–255 (≈70% speed) |
+| `PWM_FREQ` | `5000` | PWM frequency in Hz |
+| `PWM_RESOLUTION` | `8` | PWM bit depth (8-bit = 0–255 range) |
+
+**Motor direction helper functions:**
+
+```cpp
+motorA_forward(speed);   // AIN1=H, AIN2=L
+motorA_backward(speed);  // AIN1=L, AIN2=H
+motorA_stop();           // Coast: AIN1=L, AIN2=L
+
+motorB_forward(speed);   // BIN1=H, BIN2=L
+motorB_backward(speed);  // BIN1=L, BIN2=H
+motorB_stop();           // Coast: BIN1=L, BIN2=L
+```
+
+**TB6612FNG direction truth table:**
+
+| AIN1 / BIN1 | AIN2 / BIN2 | Motor action |
+|---|---|---|
+| HIGH | LOW  | Forward |
+| LOW  | HIGH | Backward |
+| LOW  | LOW  | Coast (stop) |
+| HIGH | HIGH | Brake |
+
+**Serial monitor output (115200 baud):**
+
+```
+Motor controller ready.
+Motor A + B: FORWARD
+Motor A + B: BACKWARD
+...
+```
+
+> **Note on PWM API:** The sketch uses `ledcAttach()` and `ledcWrite()` from ESP32 Arduino core v3+.
+> If using an older core (v2.x), replace with `ledcSetup()` / `ledcAttachPin()` / `ledcWrite()` using channel numbers.
 
 ---
 

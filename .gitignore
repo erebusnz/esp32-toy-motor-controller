@@ -6,3 +6,4 @@
 *.backup
 *.autosave
 debug.log
+*_backup
