@@ -4,6 +4,8 @@ A compact dual DC motor controller board designed around the **ESP32S3-Super Min
 
 This project targets small toy hacking with reliable bidirectional DC motor control, PWM speed control, and simple GPIO-controlled switching of accessories.
 
+![3D PCB Render](3dview.png)
+
 ---
 
 ## Overview
