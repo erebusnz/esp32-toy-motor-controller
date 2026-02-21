@@ -15,6 +15,8 @@ The board integrates:
 - A **TB6612FNG** dual H-bridge motor driver
 - Two GPIO-controlled low-side switches using NPN transistors
 - On-board decoupling and bulk capacitance for motor stability
+- Schottky diode reverse polarity protection on the motor supply input
+- Serial header and expansion GPIO header
 
 ---
 
@@ -47,8 +49,9 @@ The board integrates:
 
 ### Power
 
-- **VCC input connector**
+- **VCC input connector (CN3)**
   - Supplies motor driver VM
+  - SS34 Schottky diode (D1) provides reverse polarity protection (~0.4 V forward drop)
   - Bulk capacitor: 470 µF for transient suppression
 - **3.3 V logic rail**
   - Local decoupling: 100 nF + 10 µF
@@ -66,11 +69,13 @@ The board integrates:
 
 | Connector | Function |
 |---------|---------|
-| CN1 | Motor 1 output |
-| CN2 | Motor 2 output |
+| CN1 | Motor 1 output (RIGHT) |
+| CN2 | Motor 2 output (LEFT) |
 | CN3 | VCC power input |
-| CN4 | Switch 2 |
-| CN5 | Switch 1 |
+| CN4 | Switch 2 output |
+| CN5 | Switch 1 output |
+| H1 | Serial header (TX, RX) |
+| H2 | GPIO expansion header (GP3–GP6, GND) |
 
 ---
 
@@ -97,6 +102,16 @@ The board integrates:
 
 - Switches use **NPN low-side switching** (PZT2222A): drive GPIO **HIGH to turn the switch ON**, **LOW to turn it OFF**.
 - Both switches default to OFF (GPIO LOW) at boot.
+
+### GPIO Expansion (H2)
+
+| H2 Pin | ESP32S3-Super Mini GPIO |
+|--------|------------------------|
+| 1 | GP3 |
+| 2 | GP4 |
+| 3 | GP5 |
+| 4 | GP6 |
+| 5 | GND |
 
 ---
 
@@ -166,7 +181,7 @@ Motor A + B: BACKWARD
 ## Power & Electrical Considerations
 
 - Design is intended for **small DC motors and low-current switched loads**
-- No onboard reverse-polarity protection
+- Motor supply reverse polarity protected by SS34 Schottky diode (~0.4 V drop)
 - No current sensing
 - External motor suppression may be required for noisy loads
 
