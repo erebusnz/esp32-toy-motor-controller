@@ -7,3 +7,4 @@
 *.autosave
 debug.log
 *_backup
+.claude
