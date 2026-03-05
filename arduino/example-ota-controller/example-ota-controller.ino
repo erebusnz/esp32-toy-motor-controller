@@ -1,10 +1,20 @@
-// ESP32 Toy Motor Controller - Motor A & B Forward/Backward Toggle Example
+// ESP32 Toy Motor Controller - Hardware Test Sketch with OTA
+// Confirms that motor LEFT, motor RIGHT, Switch 1, and Switch 2 are working correctly.
 // Hardware: ESP32S3-Super Mini + TB6612FNG dual H-bridge motor driver
 //
 // IMPORTANT - Arduino IDE setup:
 //   Board:     ESP32S3 Dev Module
 //   Core:      Espressif ESP32 Arduino core v3.x or later (required for ledcAttach)
 //   Upload speed: 921600, USB CDC On Boot: Enabled
+
+#include <WiFi.h>
+#include "esp_wifi.h"
+#include <ESPmDNS.h>
+#include <NetworkUdp.h>
+#include <ArduinoOTA.h>
+#include "secrets.h"
+
+uint32_t last_ota_time = 0;
 
 // --- Motor A Pins (TB6612FNG) ---
 #define PWMA  8   // Motor A PWM speed
@@ -37,59 +47,98 @@
 //   AIN1=L, AIN2=L -> Coast (stop)
 //   AIN1=H, AIN2=H -> Brake
 //
-// STBY pin is hardwired HIGH on the PCB — motor driver is always enabled.
-
-// --- DIAGNOSTIC MODE ---
-// Set to true to bypass LEDC and drive PWMA/PWMB fully HIGH with digitalWrite.
-// If motors run in diagnostic mode but not normal mode, the fault is in ledcAttach/ledcWrite.
-// If motors do not run in diagnostic mode either, the fault is hardware (check VM power at CN3).
-#define DIAGNOSTIC_MODE false
+// STBY is driven HIGH in setup() via GP2 — motor driver enabled at startup.
 
 void motorA_forward(uint8_t speed) {
   digitalWrite(AIN1, HIGH);
   digitalWrite(AIN2, LOW);
-  if (DIAGNOSTIC_MODE) digitalWrite(PWMA, HIGH);
-  else                  ledcWrite(PWMA, speed);
+  ledcWrite(PWMA, speed);
 }
 
 void motorA_backward(uint8_t speed) {
   digitalWrite(AIN1, LOW);
   digitalWrite(AIN2, HIGH);
-  if (DIAGNOSTIC_MODE) digitalWrite(PWMA, HIGH);
-  else                  ledcWrite(PWMA, speed);
+  ledcWrite(PWMA, speed);
 }
 
 void motorA_stop() {
   digitalWrite(AIN1, LOW);
   digitalWrite(AIN2, LOW);
-  if (DIAGNOSTIC_MODE) digitalWrite(PWMA, LOW);
-  else                  ledcWrite(PWMA, 0);
+  ledcWrite(PWMA, 0);
 }
 
 void motorB_forward(uint8_t speed) {
   digitalWrite(BIN1, HIGH);
   digitalWrite(BIN2, LOW);
-  if (DIAGNOSTIC_MODE) digitalWrite(PWMB, HIGH);
-  else                  ledcWrite(PWMB, speed);
+  ledcWrite(PWMB, speed);
 }
 
 void motorB_backward(uint8_t speed) {
   digitalWrite(BIN1, LOW);
   digitalWrite(BIN2, HIGH);
-  if (DIAGNOSTIC_MODE) digitalWrite(PWMB, HIGH);
-  else                  ledcWrite(PWMB, speed);
+  ledcWrite(PWMB, speed);
 }
 
 void motorB_stop() {
   digitalWrite(BIN1, LOW);
   digitalWrite(BIN2, LOW);
-  if (DIAGNOSTIC_MODE) digitalWrite(PWMB, LOW);
-  else                  ledcWrite(PWMB, 0);
+  ledcWrite(PWMB, 0);
 }
 
 void setup() {
   Serial.begin(115200);
 
+  // --- WiFi + OTA setup ---
+  Serial.println("Booting");
+  WiFi.mode(WIFI_STA);
+  esp_wifi_set_max_tx_power(34); // 8.5 dBm supermini hardware issue
+  WiFi.begin(ssid, password);
+  while (WiFi.waitForConnectResult() != WL_CONNECTED) {
+    Serial.println("Connection Failed! Rebooting...");
+    delay(5000);
+    ESP.restart();
+  }
+
+  ArduinoOTA
+    .onStart([]() {
+      String type;
+      if (ArduinoOTA.getCommand() == U_FLASH) {
+        type = "sketch";
+      } else {
+        type = "filesystem";
+      }
+      Serial.println("Start updating " + type);
+    })
+    .onEnd([]() {
+      Serial.println("\nEnd");
+    })
+    .onProgress([](unsigned int progress, unsigned int total) {
+      if (millis() - last_ota_time > 500) {
+        Serial.printf("Progress: %u%%\n", (progress / (total / 100)));
+        last_ota_time = millis();
+      }
+    })
+    .onError([](ota_error_t error) {
+      Serial.printf("Error[%u]: ", error);
+      if (error == OTA_AUTH_ERROR) {
+        Serial.println("Auth Failed");
+      } else if (error == OTA_BEGIN_ERROR) {
+        Serial.println("Begin Failed");
+      } else if (error == OTA_CONNECT_ERROR) {
+        Serial.println("Connect Failed");
+      } else if (error == OTA_RECEIVE_ERROR) {
+        Serial.println("Receive Failed");
+      } else if (error == OTA_END_ERROR) {
+        Serial.println("End Failed");
+      }
+    });
+
+  ArduinoOTA.begin();
+  Serial.println("Ready");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  // --- Motor / switch setup ---
   pinMode(STBY, OUTPUT);
   digitalWrite(STBY, HIGH);  // enable motor driver immediately
 
@@ -98,8 +147,6 @@ void setup() {
   pinMode(AIN2, OUTPUT);
   pinMode(BIN1, OUTPUT);
   pinMode(BIN2, OUTPUT);
-  pinMode(PWMA, OUTPUT);
-  pinMode(PWMB, OUTPUT);
   pinMode(SW1,  OUTPUT);
   pinMode(SW2,  OUTPUT);
 
@@ -107,22 +154,19 @@ void setup() {
   digitalWrite(SW1, LOW);
   digitalWrite(SW2, LOW);
 
-  if (!DIAGNOSTIC_MODE) {
-    // Attach PWM to motor speed pins — requires ESP32 Arduino core v3+
-    ledcAttach(PWMA, PWM_FREQ, PWM_RESOLUTION);
-    ledcAttach(PWMB, PWM_FREQ, PWM_RESOLUTION);
-  }
+  // Attach PWM to motor speed pins — requires ESP32 Arduino core v3+
+  ledcAttach(PWMA, PWM_FREQ, PWM_RESOLUTION);
+  ledcAttach(PWMB, PWM_FREQ, PWM_RESOLUTION);
 
   motorA_stop();
   motorB_stop();
 
-  Serial.println(DIAGNOSTIC_MODE
-    ? "DIAGNOSTIC MODE: PWMA/PWMB driven HIGH via digitalWrite (no PWM)"
-    : "Normal mode: PWM via ledcAttach");
   Serial.println("Motor controller ready.");
 }
 
 void loop() {
+  ArduinoOTA.handle();
+
   // --- Forward ---
   Serial.println("Motor A + B: FORWARD  | SW1 ON, SW2 OFF");
   digitalWrite(LED, HIGH);
