@@ -5,6 +5,9 @@
 */ProductionFiles/
 *.backup
 *.autosave
+**/build/*
+*.asc
+PickAndPlace*.csv
 debug.log
 *_backup
 .claude
