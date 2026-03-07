@@ -36,6 +36,11 @@ uint32_t last_ota_time = 0;
 // --- Onboard LED ---
 #define LED   48
 
+// --- Motor direction flags ---
+// Set to true if a motor runs backward — avoids swapping physical wires
+#define REVERSE_RIGHT  true   // CN1 Right motor
+#define REVERSE_LEFT   false  // CN2 Left motor
+
 // --- PWM Settings ---
 #define PWM_FREQ        5000
 #define PWM_RESOLUTION  8     // 0-255
@@ -54,11 +59,13 @@ WebServer server(80);
 // ----- Motor helpers -----
 
 void motorA_forward(uint8_t speed) {
-  digitalWrite(AIN1, LOW); digitalWrite(AIN2, HIGH);  // inverted: motor A wired in reverse
+  digitalWrite(AIN1, REVERSE_RIGHT ? LOW  : HIGH);
+  digitalWrite(AIN2, REVERSE_RIGHT ? HIGH : LOW);
   ledcWrite(PWMA, speed);
 }
 void motorA_backward(uint8_t speed) {
-  digitalWrite(AIN1, HIGH); digitalWrite(AIN2, LOW);  // inverted: motor A wired in reverse
+  digitalWrite(AIN1, REVERSE_RIGHT ? HIGH : LOW);
+  digitalWrite(AIN2, REVERSE_RIGHT ? LOW  : HIGH);
   ledcWrite(PWMA, speed);
 }
 void motorA_stop() {
@@ -67,11 +74,13 @@ void motorA_stop() {
 }
 
 void motorB_forward(uint8_t speed) {
-  digitalWrite(BIN1, HIGH); digitalWrite(BIN2, LOW);
+  digitalWrite(BIN1, REVERSE_LEFT ? LOW  : HIGH);
+  digitalWrite(BIN2, REVERSE_LEFT ? HIGH : LOW);
   ledcWrite(PWMB, speed);
 }
 void motorB_backward(uint8_t speed) {
-  digitalWrite(BIN1, LOW); digitalWrite(BIN2, HIGH);
+  digitalWrite(BIN1, REVERSE_LEFT ? HIGH : LOW);
+  digitalWrite(BIN2, REVERSE_LEFT ? LOW  : HIGH);
   ledcWrite(PWMB, speed);
 }
 void motorB_stop() {

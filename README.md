@@ -4,7 +4,11 @@ A compact dual DC motor controller board designed around the **ESP32S3-Super Min
 
 This project targets small toy hacking with reliable bidirectional DC motor control, PWM speed control, and simple GPIO-controlled switching of accessories.
 
-![3D PCB Render](3dview.png)
+![3D PCB Render](media/3dview.png)
+
+| ![Robot](media/robot.jpg) | ![PCB installed in robot](media/pcb-in-robot.jpg) |
+|:---:|:---:|
+| Target toy | PCB installed inside |
 
 ---
 
@@ -30,6 +34,8 @@ The board integrates:
 ---
 
 ## Hardware Architecture
+
+![Schematic](media/schematic.png)
 
 ### Microcontroller
 
@@ -115,66 +121,101 @@ The board integrates:
 
 ---
 
-## Arduino Software
+## Arduino Sketches
 
-### Requirements
+### Arduino IDE Setup
 
-- **Arduino IDE** with the **ESP32 board package** installed
-- Board: **ESP32S3 Dev Module**
-- Core: **Espressif ESP32 Arduino core v3.x or later** — required for `ledcAttach()`. Install via Arduino IDE > Boards Manager > "esp32 by Espressif Systems" >= 3.0.0
-- USB CDC On Boot: **Enabled** (for Serial monitor over USB)
+- **Board:** ESP32S3 Dev Module
+- **Core:** Espressif ESP32 Arduino core v3.x or later — required for `ledcAttach()`. Install via Arduino IDE > Boards Manager > "esp32 by Espressif Systems" >= 3.0.0
+- **USB CDC On Boot:** Enabled (for Serial monitor over USB)
 
-### Example Sketch — Forward/Backward Toggle
-
-The included sketch `esp32-toy-motor-controller.ino` demonstrates basic bidirectional control of both motors.
-
-**What it does:**
-
-1. Runs Motor A and Motor B **forward** for 2 seconds (onboard LED on, GPIO 48)
-2. Stops briefly (400 ms coast)
-3. Runs Motor A and Motor B **backward** for 2 seconds (LED off)
-4. Stops briefly and repeats
-
-**Key constants to adjust:**
-
-| Constant | Default | Description |
-|---|---|---|
-| `MOTOR_SPEED` | `180` | PWM duty cycle, 0–255 (≈70% speed) |
-| `PWM_FREQ` | `5000` | PWM frequency in Hz |
-| `PWM_RESOLUTION` | `8` | PWM bit depth (8-bit = 0–255 range) |
-
-**Motor direction helper functions:**
+All sketches that require WiFi credentials use a `secrets.h` file (not committed). Copy `example.secrets.h` (or `secrets.h.example`) to `secrets.h` and fill in your details:
 
 ```cpp
-motorA_forward(speed);   // AIN1=H, AIN2=L
-motorA_backward(speed);  // AIN1=L, AIN2=H
-motorA_stop();           // Coast: AIN1=L, AIN2=L
-
-motorB_forward(speed);   // BIN1=H, BIN2=L
-motorB_backward(speed);  // BIN1=L, BIN2=H
-motorB_stop();           // Coast: BIN1=L, BIN2=L
+const char *ssid     = "your-network-name";
+const char *password = "your-password";
 ```
 
-**TB6612FNG direction truth table:**
+---
 
-| AIN1 / BIN1 | AIN2 / BIN2 | Motor action |
-|---|---|---|
-| HIGH | LOW  | Forward |
-| LOW  | HIGH | Backward |
-| LOW  | LOW  | Coast (stop) |
-| HIGH | HIGH | Brake |
+### `motor-switch-test` — Hardware Test
 
-**Serial monitor output (115200 baud):**
+[`arduino/motor-switch-test/`](arduino/motor-switch-test/)
 
+Confirms motors, switches, and GPIO wiring are working correctly. No WiFi required.
+
+**What it does:**
+1. Runs both motors **forward** for 2 s (LED on, SW1 on, SW2 off)
+2. Coasts briefly (400 ms)
+3. Runs both motors **backward** for 2 s (LED off, SW1 off, SW2 on)
+4. Coasts and repeats
+
+**Serial output (115200 baud):**
 ```
 Motor controller ready.
-Motor A + B: FORWARD
-Motor A + B: BACKWARD
+Motor A + B: FORWARD  | SW1 ON, SW2 OFF
+Motor A + B: BACKWARD | SW1 OFF, SW2 ON
 ...
 ```
 
-> **Note on PWM API:** The sketch uses `ledcAttach()` and `ledcWrite()` from ESP32 Arduino core v3+.
-> If using an older core (v2.x), replace with `ledcSetup()` / `ledcAttachPin()` / `ledcWrite()` using channel numbers.
+---
+
+### `example-ota-controller` — Hardware Test with OTA
+
+[`arduino/example-ota-controller/`](arduino/example-ota-controller/)
+
+Same forward/backward loop as `motor-switch-test`, but adds WiFi connectivity and **ArduinoOTA** support so subsequent firmware updates can be pushed wirelessly.
+
+**After the initial USB flash:**
+```bash
+python "espota.py" \
+  -i <device-ip> \
+  -f "build/esp32.esp32.esp32s3/example-ota-controller.ino.bin"
+```
+
+The device IP is printed over serial on boot.
+
+Requires `secrets.h` with WiFi credentials (see above).
+
+---
+
+### `wifi-browser-control` — Browser-Based Remote Control
+
+[`arduino/wifi-browser-control/`](arduino/wifi-browser-control/)
+
+Full differential-drive controller served from the ESP32 as a mobile-friendly web page. Includes ArduinoOTA.
+
+Open `http://<device-ip>` in any browser:
+
+![Browser controller interface](media/wificontroller.png)
+
+| Control | Behaviour |
+|---|---|
+| **↑ Forward** | Both motors forward — hold to move |
+| **↓ Backward** | Both motors backward — hold to move |
+| **← Left** | Pivot left (right motor fwd, left motor bwd) — hold |
+| **→ Right** | Pivot right (left motor fwd, right motor bwd) — hold |
+| **■ Stop** | Immediately stops both motors |
+| **Speed slider** | Sets motor PWM duty cycle (50–255) |
+| **Shoot** | Triggers SW1 for 5 seconds then auto-stops |
+| **Headlight** | Toggles SW2 on/off |
+
+Direction buttons stop motors on release. Re-pressing Shoot resets the 5-second timer.
+
+If a motor runs in the wrong direction, flip its flag in the sketch instead of swapping wires:
+```cpp
+#define REVERSE_RIGHT  true   // CN1 — set true if right motor runs backward
+#define REVERSE_LEFT   false  // CN2 — set true if left motor runs backward
+```
+
+**OTA upload after initial flash:**
+```bash
+python "espota.py" \
+  -i <device-ip> \
+  -f "build/esp32.esp32.esp32s3/wifi-browser-control.ino.bin"
+```
+
+Requires `secrets.h` with WiFi credentials (see above).
 
 ---
 
@@ -182,6 +223,7 @@ Motor A + B: BACKWARD
 
 - Design is intended for **small DC motors and low-current switched loads**
 - Motor supply reverse polarity protected by SS34 Schottky diode (~0.4 V drop)
+- **Use a dedicated 5 V 1 A+ supply** — USB power causes the 3.3 V rail to sag
 - No current sensing
 - External motor suppression may be required for noisy loads
 
